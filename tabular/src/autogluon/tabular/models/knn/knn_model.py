@@ -33,6 +33,18 @@ class KNNModel(AbstractModel):
         self._X_unused_index = None  # Keeps track of unused training data indices, necessary for LOO OOF generation
 
     def _get_model_type(self):
+        # Activate cuML GPU acceleration for sklearn.neighbors if using GPUs
+        num_gpus = self.params_aux.get("num_gpus", 0)
+        if num_gpus >= 1:
+            try:
+                from autogluon.common.utils.cuml_accel_utils import activate_cuml_accel_for_module
+                activated = activate_cuml_accel_for_module("sklearn.neighbors")
+                if activated:
+                    logger.log(20, "\tActivated cuML GPU acceleration for sklearn.neighbors")
+            except ImportError:
+                # cuml.accel not available, continue with CPU sklearn
+                logger.log(15, "\tcuml.accel not available, using CPU sklearn")
+
         if self.params_aux.get("use_daal", True):
             try:
                 from sklearnex.neighbors import KNeighborsClassifier, KNeighborsRegressor

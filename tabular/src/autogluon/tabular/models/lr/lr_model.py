@@ -51,6 +51,18 @@ class LinearModel(AbstractModel):
 
     # noinspection PyUnresolvedReferences
     def _get_model_type(self):
+        # Activate cuML GPU acceleration for sklearn.linear_model if using GPUs
+        num_gpus = self.params_aux.get("num_gpus", 0)
+        if num_gpus >= 1:
+            try:
+                from autogluon.common.utils.cuml_accel_utils import activate_cuml_accel_for_module
+                activated = activate_cuml_accel_for_module("sklearn.linear_model")
+                if activated:
+                    logger.log(20, "\tActivated cuML GPU acceleration for sklearn.linear_model")
+            except ImportError:
+                # cuml.accel not available, continue with CPU sklearn
+                logger.log(15, "\tcuml.accel not available, using CPU sklearn")
+
         penalty = self.params.get("penalty", "L2")
         # FIXME: False by default because AdultIncome dataset shows worse results with use_daal=True.
         #  Version: scikit-learn-intelex-2024.4.0
