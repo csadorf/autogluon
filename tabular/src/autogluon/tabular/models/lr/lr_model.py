@@ -55,11 +55,10 @@ class LinearModel(AbstractModel):
     def _get_model_type(self, num_gpus=0):
         # Activate cuML GPU acceleration for sklearn.linear_model if using GPUs
         if num_gpus >= 1:
-            try:
-                activated = activate_cuml_accel_for_module("sklearn.linear_model")
-                if activated:
-                    logger.log(20, "\tActivated cuML GPU acceleration for sklearn.linear_model")
-            except ImportError:
+            activated = activate_cuml_accel_for_module("sklearn.linear_model")
+            if activated:
+                logger.log(20, "\tActivated cuML GPU acceleration for sklearn.linear_model")
+            else:
                 # cuml.accel not available, continue with CPU sklearn
                 logger.log(15, "\tcuml.accel not available, using CPU sklearn")
 

@@ -43,11 +43,10 @@ class RFModel(AbstractModel):
     def _get_model_type(self, num_gpus=0):
         # Activate cuML GPU acceleration for sklearn.ensemble if using GPUs
         if num_gpus >= 1:
-            try:
-                activated = activate_cuml_accel_for_module("sklearn.ensemble")
-                if activated:
-                    logger.log(20, "\tActivated cuML GPU acceleration for sklearn.ensemble")
-            except ImportError:
+            activated = activate_cuml_accel_for_module("sklearn.ensemble")
+            if activated:
+                logger.log(20, "\tActivated cuML GPU acceleration for sklearn.ensemble")
+            else:
                 # cuml.accel not available, continue with CPU sklearn
                 logger.log(15, "\tcuml.accel not available, using CPU sklearn")
 

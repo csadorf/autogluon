@@ -37,11 +37,10 @@ class KNNModel(AbstractModel):
         # Activate cuML GPU acceleration for sklearn.neighbors if using GPUs
         # Use the actual calculated num_gpus value, not the user-requested value from params_aux
         if num_gpus >= 1:
-            try:
-                activated = activate_cuml_accel_for_module("sklearn.neighbors")
-                if activated:
-                    logger.log(20, "\tActivated cuML GPU acceleration for sklearn.neighbors")
-            except ImportError:
+            activated = activate_cuml_accel_for_module("sklearn.neighbors")
+            if activated:
+                logger.log(20, "\tActivated cuML GPU acceleration for sklearn.neighbors")
+            else:
                 # cuml.accel not available, continue with CPU sklearn
                 logger.log(15, "\tcuml.accel not available, using CPU sklearn")
 
