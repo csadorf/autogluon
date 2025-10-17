@@ -9,6 +9,7 @@ import numpy as np
 import pandas as pd
 
 from autogluon.common.features.types import R_FLOAT, R_INT, S_BOOL
+from autogluon.common.utils.cuml_accel_utils import activate_cuml_accel_for_module, is_cuml_accel_available
 from autogluon.common.utils.log_utils import fix_sklearnex_logging_if_kaggle
 from autogluon.common.utils.resource_utils import ResourceManager
 from autogluon.core.constants import BINARY, MULTICLASS, REGRESSION
@@ -37,7 +38,6 @@ class KNNModel(AbstractModel):
         # Use the actual calculated num_gpus value, not the user-requested value from params_aux
         if num_gpus >= 1:
             try:
-                from autogluon.common.utils.cuml_accel_utils import activate_cuml_accel_for_module
                 activated = activate_cuml_accel_for_module("sklearn.neighbors")
                 if activated:
                     logger.log(20, "\tActivated cuML GPU acceleration for sklearn.neighbors")
@@ -268,13 +268,11 @@ class KNNModel(AbstractModel):
         return self.model
 
     def _get_default_resources(self) -> tuple[int, int]:
-        from autogluon.common.utils.cuml_accel_utils import is_cuml_accel_available
         num_cpus = 1 if is_cuml_accel_available() else ResourceManager.get_cpu_count()
         num_gpus = min(1, ResourceManager.get_gpu_count()) if is_cuml_accel_available() else 0
         return num_cpus, num_gpus
 
     def _get_maximum_resources(self) -> dict[str, int | float]:
-        from autogluon.common.utils.cuml_accel_utils import is_cuml_accel_available
         # use at most 32 cpus to avoid OpenBLAS error: https://github.com/autogluon/autogluon/issues/1020
         # cuml.accel only supports single GPU execution
         max_cpus = min(ResourceManager.get_cpu_count(), 32)

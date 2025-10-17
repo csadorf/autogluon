@@ -10,6 +10,7 @@ import numpy as np
 import pandas as pd
 
 from autogluon.common.features.types import R_BOOL, R_CATEGORY, R_FLOAT, R_INT
+from autogluon.common.utils.cuml_accel_utils import activate_cuml_accel_for_module, is_cuml_accel_available
 from autogluon.common.utils.resource_utils import ResourceManager
 from autogluon.core.constants import MULTICLASS, QUANTILE, REGRESSION, SOFTCLASS
 from autogluon.core.models import AbstractModel
@@ -43,7 +44,6 @@ class RFModel(AbstractModel):
         # Activate cuML GPU acceleration for sklearn.ensemble if using GPUs
         if num_gpus >= 1:
             try:
-                from autogluon.common.utils.cuml_accel_utils import activate_cuml_accel_for_module
                 activated = activate_cuml_accel_for_module("sklearn.ensemble")
                 if activated:
                     logger.log(20, "\tActivated cuML GPU acceleration for sklearn.ensemble")
@@ -380,13 +380,11 @@ class RFModel(AbstractModel):
         return self._convert_proba_to_unified_form(y_oof_pred_proba)
 
     def _get_default_resources(self) -> tuple[int, int]:
-        from autogluon.common.utils.cuml_accel_utils import is_cuml_accel_available
         num_cpus = 1 if is_cuml_accel_available() else ResourceManager.get_cpu_count()
         num_gpus = min(1, ResourceManager.get_gpu_count()) if is_cuml_accel_available() else 0
         return num_cpus, num_gpus
 
     def _get_maximum_resources(self) -> dict[str, int | float]:
-        from autogluon.common.utils.cuml_accel_utils import is_cuml_accel_available
         # cuml.accel only supports single GPU execution
         return {"num_gpus": 1} if is_cuml_accel_available() else {"num_gpus": 0}
 
