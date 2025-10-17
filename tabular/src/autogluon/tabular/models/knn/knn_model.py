@@ -32,9 +32,9 @@ class KNNModel(AbstractModel):
         super().__init__(**kwargs)
         self._X_unused_index = None  # Keeps track of unused training data indices, necessary for LOO OOF generation
 
-    def _get_model_type(self):
+    def _get_model_type(self, num_gpus=0):
         # Activate cuML GPU acceleration for sklearn.neighbors if using GPUs
-        num_gpus = self.params_aux.get("num_gpus", 0)
+        # Use the actual calculated num_gpus value, not the user-requested value from params_aux
         if num_gpus >= 1:
             try:
                 from autogluon.common.utils.cuml_accel_utils import activate_cuml_accel_for_module
@@ -104,7 +104,7 @@ class KNNModel(AbstractModel):
         spaces = {}
         return spaces
 
-    def _fit(self, X, y, num_cpus=-1, time_limit=None, sample_weight=None, **kwargs):
+    def _fit(self, X, y, num_gpus=0, num_cpus=-1, time_limit=None, sample_weight=None, **kwargs):
         time_start = time.time()
         X = self.preprocess(X)
         params = self._get_model_params()
@@ -116,9 +116,9 @@ class KNNModel(AbstractModel):
         num_rows_max = len(X)
         # FIXME: v0.1 Must store final num rows for refit_full or else will use everything! Worst case refit_full could train far longer than the original model.
         if time_limit is None or num_rows_max <= 10000:
-            self.model = self._get_model_type()(**params).fit(X, y)
+            self.model = self._get_model_type(num_gpus=num_gpus)(**params).fit(X, y)
         else:
-            self.model = self._fit_with_samples(X=X, y=y, model_params=params, time_limit=time_limit - (time.time() - time_start))
+            self.model = self._fit_with_samples(X=X, y=y, model_params=params, num_gpus=num_gpus, time_limit=time_limit - (time.time() - time_start))
 
     def _estimate_memory_usage(self, X: pd.DataFrame, **kwargs) -> int:
         hyperparameters = self._get_model_params()
@@ -179,7 +179,7 @@ class KNNModel(AbstractModel):
         return y_oof_pred_proba
 
     # TODO: Consider making this fully generic and available to all models
-    def _fit_with_samples(self, X, y, model_params, time_limit, start_samples=10000, max_samples=None, sample_growth_factor=2, sample_time_growth_factor=8):
+    def _fit_with_samples(self, X, y, model_params, time_limit, num_gpus=0, start_samples=10000, max_samples=None, sample_growth_factor=2, sample_time_growth_factor=8):
         """
         Fit model with samples of the data repeatedly, gradually increasing the amount of data until time_limit is reached or all data is used.
 
@@ -235,7 +235,7 @@ class KNNModel(AbstractModel):
 
         time_start_sample_loop = time.time()
         time_limit_left = time_limit - (time_start_sample_loop - time_start)
-        model_type = self._get_model_type()
+        model_type = self._get_model_type(num_gpus=num_gpus)
         idx = None
         for i, samples in enumerate(num_rows_samples):
             if samples != num_rows_max:
@@ -267,19 +267,19 @@ class KNNModel(AbstractModel):
             self._X_unused_index = [i for i in range(num_rows_max) if i not in idx]
         return self.model
 
-    def _get_maximum_resources(self) -> dict[str, int | float]:
-        # use at most 32 cpus to avoid OpenBLAS error: https://github.com/autogluon/autogluon/issues/1020
-        # no GPU support
-        return {
-            "num_cpus": 32,
-            "num_gpus": 0,
-        }
-
-    def _get_default_resources(self):
-        # use at most 32 cpus to avoid OpenBLAS error: https://github.com/autogluon/autogluon/issues/1020
-        num_cpus = ResourceManager.get_cpu_count()
-        num_gpus = 0
+    def _get_default_resources(self) -> tuple[int, int]:
+        from autogluon.common.utils.cuml_accel_utils import is_cuml_accel_available
+        num_cpus = 1 if is_cuml_accel_available() else ResourceManager.get_cpu_count()
+        num_gpus = min(1, ResourceManager.get_gpu_count()) if is_cuml_accel_available() else 0
         return num_cpus, num_gpus
+
+    def _get_maximum_resources(self) -> dict[str, int | float]:
+        from autogluon.common.utils.cuml_accel_utils import is_cuml_accel_available
+        # use at most 32 cpus to avoid OpenBLAS error: https://github.com/autogluon/autogluon/issues/1020
+        # cuml.accel only supports single GPU execution
+        max_cpus = min(ResourceManager.get_cpu_count(), 32)
+        max_gpus = 1 if is_cuml_accel_available() else 0
+        return {"num_cpus": max_cpus, "num_gpus": max_gpus}
 
     @classmethod
     def supported_problem_types(cls) -> list[str] | None:

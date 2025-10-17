@@ -39,9 +39,8 @@ class RFModel(AbstractModel):
         self._num_features_post_process = None
 
     # noinspection PyUnresolvedReferences
-    def _get_model_type(self):
+    def _get_model_type(self, num_gpus=0):
         # Activate cuML GPU acceleration for sklearn.ensemble if using GPUs
-        num_gpus = self.params_aux.get("num_gpus", 0)
         if num_gpus >= 1:
             try:
                 from autogluon.common.utils.cuml_accel_utils import activate_cuml_accel_for_module
@@ -180,10 +179,10 @@ class RFModel(AbstractModel):
         available_mem = ResourceManager.get_available_virtual_mem()
         return n_estimators_final * bytes_per_estimator / available_mem
 
-    def _fit(self, X, y, num_cpus=-1, time_limit=None, sample_weight=None, **kwargs):
+    def _fit(self, X, y, num_gpus=0, num_cpus=-1, time_limit=None, sample_weight=None, **kwargs):
         time_start = time.time()
 
-        model_cls = self._get_model_type()
+        model_cls = self._get_model_type(num_gpus=num_gpus)
 
         max_memory_usage_ratio = self.params_aux["max_memory_usage_ratio"]
         params = self._get_model_params()
@@ -380,9 +379,16 @@ class RFModel(AbstractModel):
 
         return self._convert_proba_to_unified_form(y_oof_pred_proba)
 
+    def _get_default_resources(self) -> tuple[int, int]:
+        from autogluon.common.utils.cuml_accel_utils import is_cuml_accel_available
+        num_cpus = 1 if is_cuml_accel_available() else ResourceManager.get_cpu_count()
+        num_gpus = min(1, ResourceManager.get_gpu_count()) if is_cuml_accel_available() else 0
+        return num_cpus, num_gpus
+
     def _get_maximum_resources(self) -> dict[str, int | float]:
-        # no GPU support
-        return {"num_gpus": 0}
+        from autogluon.common.utils.cuml_accel_utils import is_cuml_accel_available
+        # cuml.accel only supports single GPU execution
+        return {"num_gpus": 1} if is_cuml_accel_available() else {"num_gpus": 0}
 
     def _get_default_auxiliary_params(self) -> dict:
         default_auxiliary_params = super()._get_default_auxiliary_params()

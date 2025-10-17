@@ -9,7 +9,7 @@ from sklearn.datasets import make_classification
 from autogluon.tabular import TabularPredictor
 
 
-def _run_autogluon_demo(model: str, num_gpus: int):
+def _run_autogluon_demo(model: str, num_gpus: int | None):
     # Create test dataset
     X, y = make_classification(n_samples=300, n_features=8, random_state=42)
     df = pd.DataFrame(X, columns=[f'f{i}' for i in range(8)])
@@ -23,7 +23,7 @@ def _run_autogluon_demo(model: str, num_gpus: int):
                 hyperparameters={'RF': {}},
                 num_bag_folds=0,
                 num_stack_levels=0,
-                ag_args_fit={'num_gpus': num_gpus},
+                ag_args_fit={'num_gpus': num_gpus} if num_gpus is not None else {},
                 verbosity=2
             )
         case "knn":
@@ -33,7 +33,7 @@ def _run_autogluon_demo(model: str, num_gpus: int):
                 hyperparameters={'KNN': {}},
                 num_bag_folds=0,
                 num_stack_levels=0,
-                ag_args_fit={'num_gpus': num_gpus},
+                ag_args_fit={'num_gpus': num_gpus} if num_gpus is not None else {},
                 verbosity=2
             )
         case "lr":
@@ -43,7 +43,7 @@ def _run_autogluon_demo(model: str, num_gpus: int):
                 hyperparameters={'LR': {}},
                 num_bag_folds=0,
                 num_stack_levels=0,
-                ag_args_fit={'num_gpus': num_gpus},
+                ag_args_fit={'num_gpus': num_gpus} if num_gpus is not None else {},
                 verbosity=2
             )
         case _:
@@ -56,9 +56,9 @@ def _run_autogluon_demo(model: str, num_gpus: int):
 
 @click.command()
 @click.argument("model", type=click.Choice(["rf", "knn", "lr"]))
-@click.option("--num-gpus", type=int, default=0, help="Number of GPUs to use for training")
+@click.option("--num-gpus", type=int, default=None, help="Number of GPUs to use for training")
 @click.option("--profile", is_flag=True, help="Profile the training")
-def main(model: str, num_gpus: int, profile: bool):
+def main(model: str, num_gpus: int | None, profile: bool):
     if profile:
         # importing late here to avoid otherwise contaminating the test with an
         # explicit import of cuml.accel at the user-level
