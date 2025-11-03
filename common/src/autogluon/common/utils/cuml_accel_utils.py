@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 
 # Global state to track activation
 _activated_modules = set()
-_accelerator = None
+_accelerator = {}  # Dict mapping module_name -> Accelerator instance
 
 
 def is_cuml_accel_available() -> bool:
@@ -90,20 +90,20 @@ def activate_cuml_accel_for_module(module_name: str) -> bool:
         from cuml.accel.accelerator import Accelerator
         from cuml.accel.core import _exclude_from_acceleration
 
-        # Create accelerator if this is the first activation
-        if _accelerator is None:
-            _accelerator = Accelerator(exclude=_exclude_from_acceleration)
-            logger.log(15, "Created cuML Accelerator instance")
+        # Create a dedicated accelerator instance for this module
+        accelerator = Accelerator(exclude=_exclude_from_acceleration)
+        logger.log(15, f"Created cuML Accelerator instance for {module_name}")
 
         # Map sklearn module to cuml wrapper module
         # Example: "sklearn.ensemble" -> "cuml.accel._wrappers.sklearn.ensemble"
         wrapper_module = module_name.replace("sklearn", "cuml.accel._wrappers.sklearn")
 
         # Register and install the module
-        _accelerator.register(module_name, wrapper_module)
-        _accelerator.install()
+        accelerator.register(module_name, wrapper_module)
+        accelerator.install()
 
-        # Track successful activation
+        # Store the accelerator instance and track successful activation
+        _accelerator[module_name] = accelerator
         _activated_modules.add(module_name)
         logger.log(15, f"Successfully activated cuML acceleration for {module_name}")
 
