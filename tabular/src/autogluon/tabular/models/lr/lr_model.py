@@ -15,8 +15,10 @@ from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import QuantileTransformer, StandardScaler
 
 from autogluon.common.features.types import R_BOOL, R_CATEGORY, R_FLOAT, R_INT, R_OBJECT, S_BOOL, S_TEXT_AS_CATEGORY
+from autogluon.common.utils.cuml_accel_utils import activate_cuml_accel_for_module, is_cuml_accel_available
 from autogluon.common.utils.log_utils import fix_sklearnex_logging_if_kaggle
 from autogluon.common.utils.pandas_utils import get_approximate_df_mem_usage
+from autogluon.common.utils.resource_utils import ResourceManager
 from autogluon.core.constants import BINARY, REGRESSION
 from autogluon.core.models import AbstractModel
 from autogluon.core.utils.exceptions import TimeLimitExceeded
@@ -50,7 +52,16 @@ class LinearModel(AbstractModel):
         self._pipeline = None
 
     # noinspection PyUnresolvedReferences
-    def _get_model_type(self):
+    def _get_model_type(self, num_gpus=0):
+        # Activate cuML GPU acceleration for sklearn.linear_model if using GPUs
+        if num_gpus >= 1:
+            activated = activate_cuml_accel_for_module("sklearn.linear_model")
+            if activated:
+                logger.log(20, "\tActivated cuML GPU acceleration for sklearn.linear_model")
+            else:
+                # cuml.accel not available, continue with CPU sklearn
+                logger.log(15, "\tcuml.accel not available, using CPU sklearn")
+
         penalty = self.params.get("penalty", "L2")
         # FIXME: False by default because AdultIncome dataset shows worse results with use_daal=True.
         #  Version: scikit-learn-intelex-2024.4.0
@@ -166,7 +177,7 @@ class LinearModel(AbstractModel):
     def _get_default_searchspace(self):
         return get_default_searchspace(self.problem_type)
 
-    def _fit(self, X, y, time_limit=None, num_cpus=-1, sample_weight=None, **kwargs):
+    def _fit(self, X, y, time_limit=None, num_gpus=0, num_cpus=-1, sample_weight=None, **kwargs):
         time_fit_start = time.time()
         X = self.preprocess(X, is_train=True)
         if self.problem_type == BINARY:
@@ -190,7 +201,7 @@ class LinearModel(AbstractModel):
         max_iter = params.pop("max_iter", 10000)
 
         # TODO: copy_X=True currently set during regression problem type, could potentially set to False to avoid unnecessary data copy.
-        model_cls = self._get_model_type()
+        model_cls = self._get_model_type(num_gpus=num_gpus)
 
         time_fit_model_start = time.time()
         if time_limit is not None:
@@ -320,9 +331,14 @@ class LinearModel(AbstractModel):
     ) -> int:
         return 4 * get_approximate_df_mem_usage(X).sum()
 
+    def _get_default_resources(self) -> tuple[int, int]:
+        num_cpus = 1 if is_cuml_accel_available() else ResourceManager.get_cpu_count()
+        num_gpus = min(1, ResourceManager.get_gpu_count()) if is_cuml_accel_available() else 0
+        return num_cpus, num_gpus
+
     def _get_maximum_resources(self) -> dict[str, int | float]:
-        # no GPU support
-        return {"num_gpus": 0}
+        # cuml.accel only supports single GPU execution
+        return {"num_gpus": 1} if is_cuml_accel_available() else {"num_gpus": 0}
 
     @classmethod
     def supported_problem_types(cls) -> list[str] | None:
