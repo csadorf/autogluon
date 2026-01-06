@@ -202,12 +202,12 @@ class RFModel(AbstractModel):
         if n_estimators_final > n_estimators_test * 2:
             if self.problem_type == MULTICLASS:
                 n_estimator_increments = [n_estimators_test, n_estimators_final]
-                params["warm_start"] = True
+                # params["warm_start"] = True  # disabled for cuml.accel
             else:
                 if expected_memory_usage > (0.05 * max_memory_usage_ratio):  # Somewhat arbitrary, consider finding a better value, should it scale by cores?
                     # Causes ~10% training slowdown, so try to avoid if memory is not an issue
                     n_estimator_increments = [n_estimators_test, n_estimators_final]
-                    params["warm_start"] = True
+                    # params["warm_start"] = True  # disabled for cuml.accel
 
         params["n_estimators"] = n_estimator_increments[0]
         if self._daal:
