@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import cProfile
 import copy
 import logging
 import os
@@ -2610,25 +2611,53 @@ class AbstractTabularTrainer(AbstractTrainer[AbstractModel]):
                     k_fold=k_fold, k_fold_start=k_fold_start, k_fold_end=k_fold_end, n_repeats=n_repeats, n_repeat_start=n_repeat_start
                 )
                 model_fit_kwargs.update(bagged_model_fit_kwargs)
-            model_names_trained = self._train_and_save(
-                X=X,
-                y=y,
-                model=model,
-                X_val=X_val,
-                y_val=y_val,
-                X_test=X_test,
-                y_test=y_test,
-                X_unlabeled=X_unlabeled,
-                stack_name=stack_name,
-                level=level,
-                compute_score=compute_score,
-                total_resources=total_resources,
-                errors=errors,
-                errors_ignore=errors_ignore,
-                errors_raise=errors_raise,
-                is_ray_worker=is_ray_worker,
-                **model_fit_kwargs,
-            )
+            cprofile_output = os.environ.get("CPROFILE_OUTPUT")
+            if cprofile_output:
+                profiler = cProfile.Profile()
+                profiler.enable()
+                try:
+                    model_names_trained = self._train_and_save(
+                        X=X,
+                        y=y,
+                        model=model,
+                        X_val=X_val,
+                        y_val=y_val,
+                        X_test=X_test,
+                        y_test=y_test,
+                        X_unlabeled=X_unlabeled,
+                        stack_name=stack_name,
+                        level=level,
+                        compute_score=compute_score,
+                        total_resources=total_resources,
+                        errors=errors,
+                        errors_ignore=errors_ignore,
+                        errors_raise=errors_raise,
+                        is_ray_worker=is_ray_worker,
+                        **model_fit_kwargs,
+                    )
+                finally:
+                    profiler.disable()
+                    profiler.dump_stats(cprofile_output)
+            else:
+                model_names_trained = self._train_and_save(
+                    X=X,
+                    y=y,
+                    model=model,
+                    X_val=X_val,
+                    y_val=y_val,
+                    X_test=X_test,
+                    y_test=y_test,
+                    X_unlabeled=X_unlabeled,
+                    stack_name=stack_name,
+                    level=level,
+                    compute_score=compute_score,
+                    total_resources=total_resources,
+                    errors=errors,
+                    errors_ignore=errors_ignore,
+                    errors_raise=errors_raise,
+                    is_ray_worker=is_ray_worker,
+                    **model_fit_kwargs,
+                )
         if self.callbacks and check_callbacks:
             self._callbacks_after_fit(model_names=model_names_trained, stack_name=stack_name, level=level)
         self.save()
